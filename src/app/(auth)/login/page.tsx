@@ -1,51 +1,156 @@
-import type { Metadata } from "next";
-import Link from "next/link";
+"use client"
 
-export const metadata: Metadata = {
-  title: "Sign in",
-};
+import React, { useState } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { LoginRequest } from "./api"
 
-export default function LoginPage() {
+const Login = () => {
+  const router = useRouter()
+
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError("")
+    setLoading(true)
+
+    try {
+      const token = await LoginRequest({ email, password })
+
+      if (!token) {
+        setError("Invalid email or password")
+        return
+      }
+
+      router.replace("/workspaces")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          Sign in to continue to your workspaces.
-        </p>
+    <div className="min-h-screen w-full flex flex-col lg:flex-row bg-[#FAFAFB]">
+      <div className="w-full lg:w-1/2 bg-[#141418] px-8 py-8 lg:px-14 lg:py-10 flex flex-col justify-between relative overflow-hidden">
+        <div className="pointer-events-none absolute -right-40 top-1/2 -translate-y-1/2 h-[540px] w-[540px] rounded-full border border-[#5E5CE6]/20" />
+        <div className="pointer-events-none absolute -right-24 top-1/2 -translate-y-1/2 h-[320px] w-[320px] rounded-full border border-white/[0.06]" />
+
+        <div className="relative z-10 flex items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#5E5CE6] shadow-[0_0_20px_rgba(94,92,230,0.55)]">
+            <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7 7v6a5 5 0 0010 0V7" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 12h12" />
+            </svg>
+          </div>
+          <span className="text-white font-semibold text-base tracking-tight">Thread</span>
+        </div>
+
+        <div className="relative z-10 my-16 lg:my-auto max-w-md">
+          <div className="flex items-center -space-x-2 mb-7">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#9E5B40] border-2 border-[#141418] ring-1 ring-white/40 text-xs font-semibold text-white">
+              M
+            </div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2C5A74] border-2 border-[#141418] ring-1 ring-white/40 text-xs font-semibold text-white">
+              N
+            </div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#27272F] border-2 border-[#141418] text-xs font-medium text-zinc-300">
+              2
+            </div>
+          </div>
+
+          <h1 className="text-4xl lg:text-[44px] font-bold text-white leading-[1.12] tracking-tight">
+            Small team.
+            <br />
+            Serious momentum.
+          </h1>
+
+          <p className="mt-5 text-sm lg:text-[15px] text-zinc-400 leading-relaxed">
+            A focused workspace for developers who care about craft. Plan clearly, ship confidently, and keep every detail in reach.
+          </p>
+        </div>
+
+        <div className="relative z-10 border-t border-white/10 pt-5 flex items-center justify-between text-xs text-zinc-500">
+          <span>Built for teams that build.</span>
+          <span>© 2025 Thread</span>
+        </div>
       </div>
-      <form className="flex flex-col gap-4">
-        <label className="flex flex-col gap-2 text-sm font-medium">
-          Email
-          <input
-            className="rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700"
-            type="email"
-            name="email"
-            autoComplete="email"
-          />
-        </label>
-        <label className="flex flex-col gap-2 text-sm font-medium">
-          Password
-          <input
-            className="rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700"
-            type="password"
-            name="password"
-            autoComplete="current-password"
-          />
-        </label>
-        <button
-          className="mt-2 rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-zinc-700"
-          type="submit"
-        >
-          Sign in
-        </button>
-      </form>
-      <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        No account yet?{" "}
-        <Link className="font-medium underline underline-offset-4" href="/register">
-          Create one
-        </Link>
-      </p>
+
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 lg:p-16 bg-[#FAFAFB]">
+        <div className="w-full max-w-[380px]">
+          <p className="text-[11px] font-semibold tracking-[0.14em] text-[#5E5CE6] uppercase mb-2">
+            WELCOME BACK
+          </p>
+          <h2 className="text-2xl lg:text-[28px] font-bold text-zinc-900 tracking-tight">
+            Sign in to Thread
+          </h2>
+          <p className="mt-1.5 text-sm text-zinc-500">
+            Enter your credentials to continue.
+          </p>
+
+          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+            {error && (
+              <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-600">
+                {error}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-medium text-zinc-700 mb-1.5">
+                Email address
+              </label>
+              <input
+                type="email"
+                placeholder="you@company.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="w-full rounded-lg border border-zinc-200 bg-zinc-100/70 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-[#5E5CE6] focus:bg-white focus:ring-2 focus:ring-[#5E5CE6]/15 transition"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-zinc-700 mb-1.5">
+                Password
+              </label>
+              <input
+                type="password"
+                placeholder="At least 8 characters"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="w-full rounded-lg border border-zinc-200 bg-zinc-100/70 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-[#5E5CE6] focus:bg-white focus:ring-2 focus:ring-[#5E5CE6]/15 transition"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#5E5CE6] hover:bg-[#5250D4] text-white py-2.5 px-4 text-sm font-medium transition shadow-[0_8px_22px_-4px_rgba(94,92,230,0.5)] disabled:opacity-50"
+            >
+              {loading ? (
+                "Signing in..."
+              ) : (
+                <>
+                  <span>Sign in</span>
+                  <span className="text-base leading-none">→</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          <p className="mt-7 text-center text-xs text-zinc-500">
+            New to Thread?{" "}
+            <Link href="/register" className="font-medium text-[#5E5CE6] hover:underline">
+              Create an account
+            </Link>
+          </p>
+        </div>
+      </div>
     </div>
-  );
+  )
 }
+
+export default Login
