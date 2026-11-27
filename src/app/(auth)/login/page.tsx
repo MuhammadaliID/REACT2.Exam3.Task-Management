@@ -3,7 +3,13 @@
 import React, { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { z } from "zod"
 import { LoginRequest } from "./api"
+
+const loginSchema = z.object({
+  email: z.string().email("Invalid email"),
+  password: z.string().min(5, "Password must be at least 5 characters"),
+})
 
 const Login = () => {
   const router = useRouter()
@@ -16,13 +22,20 @@ const Login = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+
+    const result = loginSchema.safeParse({ email, password })
+    if (!result.success) {
+      setError(result.error.issues[0]?.message || "Invalid input")
+      return
+    }
+
     setLoading(true)
 
     try {
       const token = await LoginRequest({ email, password })
 
       if (!token) {
-        setError("Invalid email or password")
+        setError("eror")
         return
       }
 
@@ -117,7 +130,7 @@ const Login = () => {
               </label>
               <input
                 type="password"
-                placeholder="At least 8 characters"
+                placeholder="At least 5 characters"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required

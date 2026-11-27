@@ -3,7 +3,14 @@
 import React, { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { z } from "zod"
 import { RegisterRequest } from "../login/api"
+
+const registerSchema = z.object({
+  displayName: z.string().min(2, "Name must be at least 2 characters"),
+  email: z.string().email("Invalid email"),
+  password: z.string().min(5, "Password must be at least 5 characters"),
+})
 
 const Register = () => {
   const router = useRouter()
@@ -17,6 +24,13 @@ const Register = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+
+    const result = registerSchema.safeParse({ displayName, email, password })
+    if (!result.success) {
+      setError(result.error.issues[0]?.message || "Invalid input")
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -136,10 +150,10 @@ const Register = () => {
               </label>
               <input
                 type="password"
-                placeholder="At least 8 characters"
+                placeholder="At least 5 characters"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                minLength={8}
+                minLength={5}
                 required
                 className="w-full rounded-lg border border-zinc-200 bg-zinc-100/70 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-[#5E5CE6] focus:bg-white focus:ring-2 focus:ring-[#5E5CE6]/15 transition"
               />
