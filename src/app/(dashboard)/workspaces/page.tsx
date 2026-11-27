@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 
 export default function WorkspacesPage() {
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 bg-zinc-50 px-8 py-7">
       <h1 className="text-2xl font-semibold tracking-tight">Workspaces</h1>
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
         Select a workspace to continue.
