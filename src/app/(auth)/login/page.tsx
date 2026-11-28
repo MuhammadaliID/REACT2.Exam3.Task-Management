@@ -3,6 +3,8 @@
 import React, { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { LoginRequest } from "./api"
 
@@ -11,38 +13,30 @@ const loginSchema = z.object({
   password: z.string().min(5, "Password must be at least 5 characters"),
 })
 
+type LoginForm = z.infer<typeof loginSchema>
+
 const Login = () => {
   const router = useRouter()
-
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
   const [error, setError] = useState("")
-  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginForm>({
+    resolver: zodResolver(loginSchema),
+  })
+
+  const onSubmit = async (values: LoginForm) => {
     setError("")
+    const result = await LoginRequest(values)
 
-    const result = loginSchema.safeParse({ email, password })
-    if (!result.success) {
-      setError(result.error.issues[0]?.message || "Invalid input")
+    if (!result || result.error) {
+      setError(result?.error || "Invalid email or password")
       return
     }
 
-    setLoading(true)
-
-    try {
-      const result2 = await LoginRequest({ email, password })
-
-      if (!result2 || result2.error) {
-        setError(result2?.error || "Invalid email or password")
-        return
-      }
-
-      router.replace("/w/northstar/tasks")
-    } finally {
-      setLoading(false)
-    }
+    router.replace("/w/northstar/tasks")
   }
 
   return (
@@ -103,7 +97,7 @@ const Login = () => {
             Enter your credentials to continue.
           </p>
 
-          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+          <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-5">
             {error && (
               <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-600">
                 {error}
@@ -117,11 +111,12 @@ const Login = () => {
               <input
                 type="email"
                 placeholder="you@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
+                {...register("email")}
                 className="w-full rounded-lg border border-zinc-200 bg-zinc-100/70 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-[#5E5CE6] focus:bg-white focus:ring-2 focus:ring-[#5E5CE6]/15 transition"
               />
+              {errors.email && (
+                <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>
+              )}
             </div>
 
             <div>
@@ -131,19 +126,20 @@ const Login = () => {
               <input
                 type="password"
                 placeholder="At least 5 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
+                {...register("password")}
                 className="w-full rounded-lg border border-zinc-200 bg-zinc-100/70 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-[#5E5CE6] focus:bg-white focus:ring-2 focus:ring-[#5E5CE6]/15 transition"
               />
+              {errors.password && (
+                <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>
+              )}
             </div>
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={isSubmitting}
               className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#5E5CE6] hover:bg-[#5250D4] text-white py-2.5 px-4 text-sm font-medium transition shadow-[0_8px_22px_-4px_rgba(94,92,230,0.5)] disabled:opacity-50"
             >
-              {loading ? (
+              {isSubmitting ? (
                 "Signing in..."
               ) : (
                 <>

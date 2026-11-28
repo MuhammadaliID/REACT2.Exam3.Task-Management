@@ -1,11 +1,16 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { z } from "zod"
 import {
   GetProjects,
   GetIssues,
   CreateIssue,
+  DeleteIssue,
   GetStates,
   GetLabels,
   GetMembers,
@@ -47,6 +52,19 @@ type IssueItem = {
   assignees?: MemberItem[]
   _project?: ProjectItem
 }
+
+const taskSchema = z.object({
+  title: z.string().min(1, "Task title is required"),
+  description: z.string().optional(),
+  projectId: z.string().min(1, "Project is required"),
+  stateId: z.string().min(1, "Status is required"),
+  priority: z.string(),
+  assigneeId: z.string().optional(),
+  labelId: z.string().optional(),
+})
+
+type TaskForm = z.infer<typeof taskSchema>
+
 const priorityColors: Record<string, string> = {
   urgent: "text-red-600",
   high: "text-orange-600",
@@ -60,6 +78,7 @@ function PriorityLabel({ priority }: { priority: string }) {
   const label = p.charAt(0).toUpperCase() + p.slice(1)
   return <span className={priorityColors[p] || "text-zinc-400"}>{label}</span>
 }
+
 function StatusIcon({ status }: { status: string }) {
   const s = (status || "").toLowerCase()
 
@@ -121,15 +140,6 @@ function OwnerAvatar({ assignees }: { assignees?: MemberItem[] }) {
   )
 }
 
-const filterOptions = [
-  { value: "", label: "All" },
-  { value: "backlog", label: "Backlog" },
-  { value: "todo", label: "Todo" },
-  { value: "in_progress", label: "In Progress" },
-  { value: "in_review", label: "In Review" },
-  { value: "done", label: "Done" },
-]
-
 function CreateTaskModal({
   open,
   onClose,
@@ -145,58 +155,84 @@ function CreateTaskModal({
   members: MemberItem[]
   onCreated: () => void
 }) {
-  const [title, setTitle] = useState("")
-  const [description, setDescription] = useState("")
-  const [projectId, setProjectId] = useState("")
-  const [stateId, setStateId] = useState("")
-  const [priority, setPriority] = useState("none")
-  const [assigneeId, setAssigneeId] = useState("")
-  const [labelId, setLabelId] = useState("")
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
-  const [projectStates, setProjectStates] = useState<StateItem[]>([])
-  const [projectLabels, setProjectLabels] = useState<LabelItem[]>([])
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    reset,
+    formState: { errors },
+  } = useForm<TaskForm>({
+    resolver: zodResolver(taskSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      projectId: projects[0]?.id || "",
+      stateId: "",
+      priority: "none",
+      assigneeId: "",
+      labelId: "",
+    },
+  })
 
-  const activeProjectId = projectId || projects[0]?.id || ""
+  const selectedProjectId = watch("projectId") || projects[0]?.id || ""
+  const currentStateId = watch("stateId")
 
   useEffect(() => {
-    if (!activeProjectId || !slug) return
-    GetStates(slug, activeProjectId).then(setProjectStates)
-    GetLabels(slug, activeProjectId).then(setProjectLabels)
-  }, [slug, activeProjectId])
+    if (projects.length && !watch("projectId")) {
+      setValue("projectId", projects[0].id)
+    }
+  }, [projects, setValue, watch])
+
+  const { data: projectStates = [] } = useQuery<StateItem[]>({
+    queryKey: ["project-states", slug, selectedProjectId],
+    queryFn: () => GetStates(slug, selectedProjectId),
+    enabled: open && Boolean(slug && selectedProjectId),
+  })
+
+  useEffect(() => {
+    if (projectStates.length && !currentStateId) {
+      setValue("stateId", projectStates[0].id)
+    }
+  }, [projectStates, currentStateId, setValue])
+
+  const { data: projectLabels = [] } = useQuery<LabelItem[]>({
+    queryKey: ["project-labels", slug, selectedProjectId],
+    queryFn: () => GetLabels(slug, selectedProjectId),
+    enabled: open && Boolean(slug && selectedProjectId),
+  })
+
+  const mutation = useMutation({
+    mutationFn: (values: TaskForm) => {
+      const body: Record<string, unknown> = {
+        title: values.title.trim(),
+        state_id: values.stateId,
+        priority: values.priority,
+      }
+      if (values.description?.trim()) body.description = values.description.trim()
+      if (values.assigneeId) body.assignee_ids = [values.assigneeId]
+      if (values.labelId) body.label_ids = [values.labelId]
+      return CreateIssue(slug, values.projectId, body)
+    },
+    onSuccess: (result) => {
+      if (result?.error) {
+        setError(result.error)
+        return
+      }
+      setError("")
+      reset()
+      onCreated()
+      onClose()
+    },
+  })
 
   if (!open) return null
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!title.trim() || !activeProjectId) return
-    setLoading(true)
+  const onSubmit = (values: TaskForm) => {
     setError("")
-
-    const body: Record<string, string> = { title: title.trim() }
-    if (description.trim()) body.description = description.trim()
-    if (stateId) body.state_id = stateId
-    if (priority !== "none") body.priority = priority
-    if (assigneeId) body.assignee_id = assigneeId
-    if (labelId) body.label_id = labelId
-
-    const result = await CreateIssue(slug, activeProjectId, body)
-    setLoading(false)
-
-    if (result?.error) {
-      setError(result.error)
-    } else {
-      setTitle("")
-      setDescription("")
-      setStateId("")
-      setPriority("none")
-      setAssigneeId("")
-      setLabelId("")
-      setError("")
-      onCreated()
-      onClose()
-    }
+    mutation.mutate(values)
   }
 
   return (
@@ -213,25 +249,25 @@ function CreateTaskModal({
           <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 text-xl leading-none">&times;</button>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="mt-5 space-y-4">
           <div>
             <label className="block text-sm font-medium text-zinc-700">Task title</label>
             <input
-              required
               autoFocus
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              {...register("title")}
               placeholder="What needs to be done?"
               className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
             />
+            {errors.title && (
+              <p className="mt-1 text-xs text-red-600">{errors.title.message}</p>
+            )}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-zinc-700">Description</label>
             <textarea
               rows={3}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              {...register("description")}
               placeholder="Add helpful context..."
               className="mt-1 w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
             />
@@ -241,8 +277,7 @@ function CreateTaskModal({
             <div>
               <label className="block text-sm font-medium text-zinc-700">Project</label>
               <select
-                value={activeProjectId}
-                onChange={(e) => setProjectId(e.target.value)}
+                {...register("projectId")}
                 className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-indigo-500"
               >
                 {projects.map((p) => (
@@ -253,15 +288,17 @@ function CreateTaskModal({
             <div>
               <label className="block text-sm font-medium text-zinc-700">Status</label>
               <select
-                value={stateId}
-                onChange={(e) => setStateId(e.target.value)}
+                {...register("stateId")}
                 className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-indigo-500"
               >
-                <option value="">Default</option>
+                {projectStates.length === 0 && <option value="">No statuses</option>}
                 {projectStates.map((s) => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
+              {errors.stateId && (
+                <p className="mt-1 text-xs text-red-600">{errors.stateId.message}</p>
+              )}
             </div>
           </div>
 
@@ -269,8 +306,7 @@ function CreateTaskModal({
             <div>
               <label className="block text-sm font-medium text-zinc-700">Priority</label>
               <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value)}
+                {...register("priority")}
                 className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-indigo-500"
               >
                 <option value="none">None</option>
@@ -283,8 +319,7 @@ function CreateTaskModal({
             <div>
               <label className="block text-sm font-medium text-zinc-700">Assignee</label>
               <select
-                value={assigneeId}
-                onChange={(e) => setAssigneeId(e.target.value)}
+                {...register("assigneeId")}
                 className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-indigo-500"
               >
                 <option value="">Unassigned</option>
@@ -300,8 +335,7 @@ function CreateTaskModal({
           <div className="w-1/2 pr-2">
             <label className="block text-sm font-medium text-zinc-700">Label</label>
             <select
-              value={labelId}
-              onChange={(e) => setLabelId(e.target.value)}
+              {...register("labelId")}
               className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-indigo-500"
             >
               <option value="">None</option>
@@ -323,10 +357,10 @@ function CreateTaskModal({
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={mutation.isPending}
               className="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
             >
-              {loading ? "Creating..." : "Create task"}
+              {mutation.isPending ? "Creating..." : "Create task"}
             </button>
           </div>
         </form>
@@ -338,73 +372,70 @@ function CreateTaskModal({
 export default function MyTasksPage() {
   const params = useParams()
   const slug = (params?.slug as string) || "northstar"
+  const queryClient = useQueryClient()
 
-  const [projects, setProjects] = useState<ProjectItem[]>([])
-  const [issues, setIssues] = useState<IssueItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const [searchInput, setSearchInput] = useState("")
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState("")
   const [showCreate, setShowCreate] = useState(false)
-  const [members, setMembers] = useState<MemberItem[]>([])
-
-  const [projectMap, setProjectMap] = useState<Record<string, ProjectItem>>({})
-  const [statesMap, setStatesMap] = useState<Record<string, string>>({})
-
-  const loadData = useCallback(async () => {
-    const projectsList: ProjectItem[] = await GetProjects(slug)
-    setProjects(projectsList)
-
-    const pMap: Record<string, ProjectItem> = {}
-    projectsList.forEach((p) => {
-      pMap[p.id] = p
-    })
-    setProjectMap(pMap)
-
-    const membersList: MemberItem[] = await GetMembers(slug)
-    setMembers(membersList)
-
-    const allIssues: IssueItem[] = []
-    const allStates: Record<string, string> = {}
-
-    for (const project of projectsList) {
-      const queryParams: Record<string, string> = {}
-      if (search) queryParams.search = search
-      if (filter) queryParams.state = filter
-
-      const projectIssues: IssueItem[] = await GetIssues(slug, project.id, queryParams)
-      projectIssues.forEach((issue) => {
-        allIssues.push({ ...issue, _project: project })
-      })
-
-      const states: StateItem[] = await GetStates(slug, project.id)
-      states.forEach((s) => {
-        allStates[s.id] = s.name
-      })
-    }
-
-    setStatesMap(allStates)
-    setIssues(allIssues)
-    setLoading(false)
-  }, [slug, search, filter])
 
   useEffect(() => {
-    let active = true
-    Promise.resolve().then(() => {
-      if (active) loadData()
-    })
-    return () => {
-      active = false
-    }
-  }, [loadData])
-
-  const [searchInput, setSearchInput] = useState("")
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(true)
-      setSearch(searchInput)
-    }, 400)
+    const timer = setTimeout(() => setSearch(searchInput), 400)
     return () => clearTimeout(timer)
   }, [searchInput])
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["my-tasks", slug, search],
+    queryFn: async () => {
+      const projects: ProjectItem[] = await GetProjects(slug)
+      const members: MemberItem[] = await GetMembers(slug)
+
+      const projectMap: Record<string, ProjectItem> = {}
+      projects.forEach((p) => {
+        projectMap[p.id] = p
+      })
+
+      const issues: IssueItem[] = []
+      const statesMap: Record<string, string> = {}
+
+      for (const project of projects) {
+        const queryParams: Record<string, string> = {}
+        if (search) queryParams.search = search
+
+        const projectIssues: IssueItem[] = await GetIssues(slug, project.id, queryParams)
+        projectIssues.forEach((issue) => {
+          issues.push({ ...issue, _project: project })
+        })
+
+        const states: StateItem[] = await GetStates(slug, project.id)
+        states.forEach((s) => {
+          statesMap[s.id] = s.name
+        })
+      }
+
+      return { projects, members, projectMap, statesMap, issues }
+    },
+  })
+
+  const projects = data?.projects || []
+  const members = data?.members || []
+  const projectMap = data?.projectMap || {}
+  const statesMap = data?.statesMap || {}
+  const allIssues = data?.issues || []
+
+  const statusOptions = Array.from(new Set(Object.values(statesMap)))
+
+  const issues = filter
+    ? allIssues.filter((issue) => getStatusName(issue).toLowerCase() === filter.toLowerCase())
+    : allIssues
+
+  const deleteMutation = useMutation({
+    mutationFn: ({ projectId, issueId }: { projectId: string; issueId: string }) =>
+      DeleteIssue(slug, projectId, issueId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["my-tasks", slug] })
+    },
+  })
 
   function getIdentifier(issue: IssueItem) {
     const project = projectMap[issue.project_id] || issue._project
@@ -451,14 +482,12 @@ export default function MyTasksPage() {
         </div>
         <select
           value={filter}
-          onChange={(e) => {
-            setLoading(true)
-            setFilter(e.target.value)
-          }}
+          onChange={(e) => setFilter(e.target.value)}
           className="rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-indigo-500"
         >
-          {filterOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          <option value="">All</option>
+          {statusOptions.map((statusName) => (
+            <option key={statusName} value={statusName}>{statusName}</option>
           ))}
         </select>
       </div>
@@ -472,18 +501,19 @@ export default function MyTasksPage() {
               <th className="px-4 py-3">Priority</th>
               <th className="px-4 py-3">Due</th>
               <th className="px-4 py-3 text-right">Owner</th>
+              <th className="px-4 py-3 text-right">Action</th>
             </tr>
           </thead>
           <tbody>
-            {loading ? (
+            {isLoading ? (
               <tr>
-                <td colSpan={5} className="py-16 text-center text-zinc-400">
+                <td colSpan={6} className="py-16 text-center text-zinc-400">
                   <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-zinc-200 border-t-indigo-600" />
                 </td>
               </tr>
             ) : issues.length === 0 ? (
               <tr>
-                <td colSpan={5} className="py-16 text-center text-zinc-400">
+                <td colSpan={6} className="py-16 text-center text-zinc-400">
                   No tasks found
                 </td>
               </tr>
@@ -515,6 +545,21 @@ export default function MyTasksPage() {
                         <OwnerAvatar assignees={issue.assignees} />
                       </div>
                     </td>
+                    <td className="px-4 py-4 text-right">
+                      <button
+                        type="button"
+                        disabled={deleteMutation.isPending}
+                        onClick={() =>
+                          deleteMutation.mutate({
+                            projectId: issue.project_id,
+                            issueId: issue.id,
+                          })
+                        }
+                        className="rounded-md px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        Delete
+                      </button>
+                    </td>
                   </tr>
                 )
               })
@@ -529,10 +574,7 @@ export default function MyTasksPage() {
         slug={slug}
         projects={projects}
         members={members}
-        onCreated={() => {
-          setLoading(true)
-          loadData()
-        }}
+        onCreated={() => queryClient.invalidateQueries({ queryKey: ["my-tasks", slug] })}
       />
     </div>
   )

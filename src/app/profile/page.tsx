@@ -3,6 +3,9 @@
 import React, { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { z } from "zod"
 import { GetProfileRequest, UpdateProfileRequest } from "../(auth)/login/api"
 
@@ -11,78 +14,68 @@ const profileSchema = z.object({
   avatarUrl: z.string(),
 })
 
+type ProfileForm = z.infer<typeof profileSchema>
+
 const ProfilePage = () => {
   const router = useRouter()
-
-  const [email, setEmail] = useState("")
-  const [displayName, setDisplayName] = useState("")
-  const [avatarUrl, setAvatarUrl] = useState("")
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
+  const queryClient = useQueryClient()
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
 
-  useEffect(() => {
-    const loadProfile = async () => {
+  const { data: user, isLoading } = useQuery({
+    queryKey: ["profile"],
+    queryFn: async () => {
       const token = localStorage.getItem("token")
-      if (!token) {
-        router.replace("/login")
-        return
-      }
+      if (!token) return null
+      return GetProfileRequest()
+    },
+  })
 
-      const user = await GetProfileRequest()
-      if (!user) {
-        router.replace("/login")
-        return
-      }
-
-      setEmail(user.email || "")
-      setDisplayName(user.display_name || "")
-      setAvatarUrl(user.avatar_url || "")
-      setLoading(false)
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.replace("/login")
     }
+  }, [isLoading, user, router])
 
-    loadProfile()
-  }, [router])
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<ProfileForm>({
+    resolver: zodResolver(profileSchema),
+    values: {
+      displayName: user?.display_name || "",
+      avatarUrl: user?.avatar_url || "",
+    },
+  })
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-    setSuccess("")
-
-    const result = profileSchema.safeParse({ displayName, avatarUrl })
-    if (!result.success) {
-      setError(result.error.issues[0]?.message || "Invalid input")
-      return
-    }
-
-    setSaving(true)
-
-    try {
-      const payload: { display_name: string; avatar_url?: string } = {
-        display_name: displayName,
-      }
-
-      if (avatarUrl.trim()) {
-        payload.avatar_url = avatarUrl.trim()
-      }
-
-      const data = await UpdateProfileRequest(payload)
-
+  const mutation = useMutation({
+    mutationFn: (payload: { display_name: string; avatar_url?: string }) =>
+      UpdateProfileRequest(payload),
+    onSuccess: (data) => {
       if (!data || data.error) {
         setError(data?.error || "Update failed")
         return
       }
-
-      setDisplayName(data.display_name || displayName)
-      setAvatarUrl(data.avatar_url || "")
+      queryClient.setQueryData(["profile"], data)
       setSuccess("Profile updated")
-    } finally {
-      setSaving(false)
+    },
+  })
+
+  const onSubmit = (values: ProfileForm) => {
+    setError("")
+    setSuccess("")
+    const payload: { display_name: string; avatar_url?: string } = {
+      display_name: values.displayName,
     }
+    if (values.avatarUrl.trim()) {
+      payload.avatar_url = values.avatarUrl.trim()
+    }
+    mutation.mutate(payload)
   }
 
-  if (loading) {
+  if (isLoading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#FAFAFB] text-sm text-zinc-500">
         Loading...
@@ -90,7 +83,9 @@ const ProfilePage = () => {
     )
   }
 
-  const initial = (displayName || email || "U").charAt(0).toUpperCase()
+  const displayName = watch("displayName")
+  const avatarUrl = watch("avatarUrl")
+  const initial = (displayName || user.email || "U").charAt(0).toUpperCase()
 
   return (
     <div className="min-h-screen bg-[#FAFAFB] py-12 px-6">
@@ -110,7 +105,7 @@ const ProfilePage = () => {
             )}
             <div>
               <h1 className="text-lg font-bold text-zinc-900">Profile</h1>
-              <p className="text-xs text-zinc-500">{email}</p>
+              <p className="text-xs text-zinc-500">{user.email}</p>
             </div>
           </div>
 
@@ -122,7 +117,7 @@ const ProfilePage = () => {
           </Link>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {error && (
             <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-600">
               {error}
@@ -141,7 +136,7 @@ const ProfilePage = () => {
             </label>
             <input
               type="email"
-              value={email}
+              value={user.email || ""}
               disabled
               className="w-full rounded-lg border border-zinc-200 bg-zinc-100 px-3.5 py-2.5 text-sm text-zinc-500 outline-none cursor-not-allowed"
             />
@@ -154,11 +149,12 @@ const ProfilePage = () => {
             <input
               type="text"
               placeholder="Your name"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              required
+              {...register("displayName")}
               className="w-full rounded-lg border border-zinc-200 bg-zinc-100/70 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-[#5E5CE6] focus:bg-white focus:ring-2 focus:ring-[#5E5CE6]/15 transition"
             />
+            {errors.displayName && (
+              <p className="mt-1 text-xs text-red-600">{errors.displayName.message}</p>
+            )}
           </div>
 
           <div>
@@ -168,18 +164,17 @@ const ProfilePage = () => {
             <input
               type="text"
               placeholder="https://..."
-              value={avatarUrl}
-              onChange={(e) => setAvatarUrl(e.target.value)}
+              {...register("avatarUrl")}
               className="w-full rounded-lg border border-zinc-200 bg-zinc-100/70 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-[#5E5CE6] focus:bg-white focus:ring-2 focus:ring-[#5E5CE6]/15 transition"
             />
           </div>
 
           <button
             type="submit"
-            disabled={saving}
+            disabled={mutation.isPending}
             className="w-full rounded-lg bg-[#5E5CE6] hover:bg-[#5250D4] text-white py-2.5 px-4 text-sm font-medium transition disabled:opacity-50"
           >
-            {saving ? "Saving..." : "Save changes"}
+            {mutation.isPending ? "Saving..." : "Save changes"}
           </button>
         </form>
       </div>
