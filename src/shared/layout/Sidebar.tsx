@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/shared/lib/utils";
+import { GetProfileRequest } from "@/app/(auth)/login/api";
 import {
   BellIcon,
   BoardIcon,
@@ -52,6 +54,24 @@ type NavItem = {
 export function Sidebar({ slug, workspace, projects, user, unreadCount }: Props) {
   const pathname = usePathname() ?? "";
   const base = `/w/${slug}`;
+
+  const [realUser, setRealUser] = useState<SidebarUser>(user);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      const data = await GetProfileRequest();
+      if (data && !data.error) {
+        const name = data.display_name || data.email || "User";
+        setRealUser({
+          name,
+          email: data.email || "",
+          initials: name.charAt(0).toUpperCase(),
+          color: user.color,
+        });
+      }
+    };
+    loadUser();
+  }, [user.color]);
 
   const sections: Array<{ title: string; items: NavItem[] }> = [
     {
@@ -174,16 +194,16 @@ export function Sidebar({ slug, workspace, projects, user, unreadCount }: Props)
           >
             <span
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
-              style={{ backgroundColor: user.color }}
+              style={{ backgroundColor: realUser.color }}
             >
-              {user.initials}
+              {realUser.initials}
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-semibold text-white">
-                {user.name}
+                {realUser.name}
               </span>
               <span className="block truncate text-[11px] text-zinc-500">
-                {user.email}
+                {realUser.email}
               </span>
             </span>
           </Link>
