@@ -39,7 +39,7 @@ const Login = () => {
         return
       }
 
-      router.replace("/workspaces")
+      router.replace("/w/northstar/tasks")
     } finally {
       setLoading(false)
     }

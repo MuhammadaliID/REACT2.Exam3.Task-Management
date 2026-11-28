@@ -115,7 +115,7 @@ const ProfilePage = () => {
           </div>
 
           <Link
-            href="/workspaces"
+            href="/w/northstar/tasks"
             className="text-xs font-medium text-[#5E5CE6] hover:underline"
           >
             Back
