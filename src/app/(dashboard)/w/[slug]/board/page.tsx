@@ -4,6 +4,8 @@ export const metadata: Metadata = {
   title: "Board",
 };
 
+
+
 export default function BoardPage() {
   return (
     <div className="flex flex-col gap-4">
