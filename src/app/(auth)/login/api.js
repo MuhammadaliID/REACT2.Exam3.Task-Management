@@ -56,6 +56,31 @@ export async function RegisterRequest(obj) {
   }
 }
 
+export async function GetProfileRequest() {
+  try {
+    const { data } = await axios.get(`${api}/auth/me`, {
+      headers: getAuthHeaders(),
+    })
+    return data
+  } catch (error) {
+    console.error("Get profile error:", error)
+    return null
+  }
+}
+
+export async function UpdateProfileRequest(obj) {
+  try {
+    const { data } = await axios.patch(`${api}/auth/me`, obj, {
+      headers: getAuthHeaders(),
+    })
+    return data
+  } catch (error) {
+    console.error("Update profile error:", error)
+    const message = error?.response?.data?.error?.message
+    return { error: message || "Update failed" }
+  }
+}
+
 export function getAuthHeaders() {
   const token = localStorage.getItem("token")
 
