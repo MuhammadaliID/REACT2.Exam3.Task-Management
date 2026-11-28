@@ -32,10 +32,10 @@ const Login = () => {
     setLoading(true)
 
     try {
-      const token = await LoginRequest({ email, password })
+      const result2 = await LoginRequest({ email, password })
 
-      if (!token) {
-        setError("eror")
+      if (!result2 || result2.error) {
+        setError(result2?.error || "Invalid email or password")
         return
       }
 

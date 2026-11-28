@@ -34,14 +34,14 @@ const Register = () => {
     setLoading(true)
 
     try {
-      const token = await RegisterRequest({
+      const result2 = await RegisterRequest({
         email,
         password,
         display_name: displayName,
       })
 
-      if (!token) {
-        setError("Registration failed")
+      if (!result2 || result2.error) {
+        setError(result2?.error || "Registration failed")
         return
       }
 

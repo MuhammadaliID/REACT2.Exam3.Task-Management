@@ -1,6 +1,6 @@
 import axios from "axios"
 
-export const api = "http://127.0.0.1:3000/api/v1"
+export const api = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:3000/api/v1"
 
 export async function LoginRequest(obj) {
   try {
@@ -17,10 +17,15 @@ export async function LoginRequest(obj) {
       localStorage.setItem("token", token)
     }
 
+    if (data?.refresh_token) {
+      localStorage.setItem("refresh_token", data.refresh_token)
+    }
+
     return token || null
   } catch (error) {
     console.error("Login error:", error)
-    return null
+    const message = error?.response?.data?.error?.message
+    return { error: message || "Login failed" }
   }
 }
 
@@ -39,10 +44,15 @@ export async function RegisterRequest(obj) {
       localStorage.setItem("token", token)
     }
 
+    if (data?.refresh_token) {
+      localStorage.setItem("refresh_token", data.refresh_token)
+    }
+
     return token || null
   } catch (error) {
     console.error("Register error:", error)
-    return null
+    const message = error?.response?.data?.error?.message
+    return { error: message || "Registration failed" }
   }
 }
 
