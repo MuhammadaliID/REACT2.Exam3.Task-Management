@@ -3,13 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Sidebar } from "@/shared/layout/Sidebar";
+import { WorkspaceTopbar } from "@/shared/layout/WorkspaceTopbar";
 import { projectApi, workspaceProjectsPath } from "@/features/projects/project-api";
+import { useWorkspaceNotifications } from "@/features/workspaces/notification-store";
 
 const colors = ["#6558f5", "#0f9f86", "#ec8b3a", "#3d82c4", "#c05c83"];
 
 export default function WorkspaceShell({ slug, children }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
+  const notifications = useWorkspaceNotifications(slug);
   const projectPath = workspaceProjectsPath(slug);
 
   useEffect(() => {
@@ -37,5 +40,7 @@ export default function WorkspaceShell({ slug, children }) {
   const displayName = user.display_name || user.email || "Account";
   const initials = displayName.split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((part) => part[0].toUpperCase()).join("") || "U";
 
-  return <><Sidebar slug={slug} workspace={{ name: workspace.name, memberCount: members.length, avatarInitial: workspace.name?.[0]?.toUpperCase() || "W", color: "#6558f5" }} projects={projects.map((project, index) => ({ ...project, color: colors[index % colors.length] }))} user={{ name: displayName, email: user.email || "", initials, color: "#b16b53" }} unreadCount={0} /><div className="flex min-w-0 flex-1 flex-col bg-[#f7f7f9]"><main className="flex-1 px-6 py-7 lg:px-8">{children}</main></div></>;
+  const unreadCount = notifications.filter((notification) => !notification.isRead).length;
+
+  return <><Sidebar slug={slug} workspace={{ name: workspace.name, memberCount: members.length, avatarInitial: workspace.name?.[0]?.toUpperCase() || "W", color: "#6558f5" }} projects={projects.map((project, index) => ({ ...project, color: colors[index % colors.length] }))} user={{ name: displayName, email: user.email || "", initials, color: "#b16b53" }} unreadCount={unreadCount} /><div className="flex min-w-0 flex-1 flex-col bg-[#f7f7f9]"><WorkspaceTopbar slug={slug} workspaceName={workspace.name} unreadCount={unreadCount} /><main className="flex-1 px-6 py-7 lg:px-10">{children}</main></div></>;
 }
